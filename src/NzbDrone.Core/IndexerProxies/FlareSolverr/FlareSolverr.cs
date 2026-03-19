@@ -58,10 +58,14 @@ namespace NzbDrone.Core.IndexerProxies.FlareSolverr
 
             if (flaresolverrResponse.StatusCode != HttpStatusCode.OK && flaresolverrResponse.StatusCode != HttpStatusCode.InternalServerError)
             {
-                throw new FlareSolverrException("HTTP StatusCode not 200 or 500. Status is :" + response.StatusCode);
+                throw new FlareSolverrException("HTTP StatusCode not 200 or 500. Status is :" + flaresolverrResponse.StatusCode);
             }
 
             var result = JsonConvert.DeserializeObject<FlareSolverrResponse>(flaresolverrResponse.Content);
+
+            _logger.Debug("FlareSolverr response status: {0}, message: {1}", result.Status, result.Message);
+            _logger.Debug("FlareSolverr solution has response body: {0} (length: {1})", result.Solution.Response.IsNotNullOrWhiteSpace(), result.Solution.Response?.Length ?? 0);
+            _logger.Debug("FlareSolverr returned {0} cookies, UA: {1}", result.Solution.Cookies?.Length ?? 0, result.Solution.UserAgent);
 
             var newRequest = response.Request;
 
@@ -72,7 +76,9 @@ namespace NzbDrone.Core.IndexerProxies.FlareSolverr
             InjectCookies(newRequest, result);
 
             //Request again with User-Agent and Cookies from Flaresolverr
+            _logger.Debug("Attempting cookie-based retry for {0}", newRequest.Url);
             var finalResponse = _httpClient.Execute(newRequest);
+            _logger.Debug("Cookie retry response: {0} (CF protected: {1})", finalResponse.StatusCode, CloudFlareDetectionService.IsCloudflareProtected(finalResponse));
 
             return finalResponse;
         }
